@@ -15,16 +15,24 @@ import gui.listeners.DataChangeListeners;
 import gui.util.Alerts;
 import gui.util.Constraints;
 import gui.util.Utils;
+import javafx.collections.FXCollections;
+import javafx.collections.ObservableList;
 import javafx.event.ActionEvent;
 import javafx.fxml.FXML;
 import javafx.fxml.Initializable;
 import javafx.scene.control.Alert.AlertType;
 import javafx.scene.control.Button;
+import javafx.scene.control.ComboBox;
 import javafx.scene.control.DatePicker;
 import javafx.scene.control.Label;
+import javafx.scene.control.ListCell;
+import javafx.scene.control.ListView;
 import javafx.scene.control.TextField;
+import javafx.util.Callback;
+import model.entities.Department;
 import model.entities.Seller;
 import model.exceptions.ValidationException;
+import model.services.DepartmentService;
 import model.services.SellerService;
 
 public class SellerFormController implements Initializable {
@@ -33,6 +41,8 @@ public class SellerFormController implements Initializable {
 
 	private SellerService service;
 
+	private DepartmentService departmentService;
+
 	private List<DataChangeListeners> dataChangeListeners = new ArrayList<>();
 
 	@FXML
@@ -40,18 +50,20 @@ public class SellerFormController implements Initializable {
 
 	@FXML
 	private TextField txtName;
-	
+
 	@FXML
 	private TextField txtEmail;
 	@FXML
 	private DatePicker dpBirhtdate;
 	@FXML
 	private TextField txtBaseSalary;
-	
+
+	@FXML
+	private ComboBox<Department> comboBoxDepartment;
 
 	@FXML
 	private Label labelErrorName;
-	
+
 	@FXML
 	private Label labelErrorEmail;
 	@FXML
@@ -65,12 +77,16 @@ public class SellerFormController implements Initializable {
 	@FXML
 	private Button btCancel;
 
+	@FXML
+	private ObservableList<Department> obsList;
+
 	public void setSeller(Seller entity) {
 		this.entity = entity;
 	}
 
-	public void setSellerService(SellerService service) {
+	public void setSellerServices(SellerService service, DepartmentService departmentservice) {
 		this.service = service;
+		this.departmentService = departmentservice;
 	}
 
 	public void subscribreDataChangeListener(DataChangeListeners listener) {
@@ -92,8 +108,7 @@ public class SellerFormController implements Initializable {
 			Utils.currentStage(event).close();
 		} catch (DbException e) {
 			Alerts.showAlert("Error saving data", null, e.getMessage(), AlertType.ERROR);
-		}
-		catch (ValidationException e) {
+		} catch (ValidationException e) {
 			setErrorMessages(e.getErrors());
 		}
 	}
@@ -109,17 +124,17 @@ public class SellerFormController implements Initializable {
 		Seller obj = new Seller();
 
 		ValidationException exception = new ValidationException("Validation Error");
-		
+
 		obj.setId(Utils.tryParseToInt(txtId.getText()));
-		if(txtName.getText() == null || txtName.getText().trim().equals("")) {
+		if (txtName.getText() == null || txtName.getText().trim().equals("")) {
 			exception.addError("name", "field cant be empty");
 		}
 		obj.setName(txtName.getText());
-		
+
 		if (exception.getErrors().size() > 0) {
 			throw exception;
 		}
-		
+
 		return obj;
 	}
 
@@ -139,7 +154,7 @@ public class SellerFormController implements Initializable {
 		Constraints.setTextFieldDouble(txtBaseSalary);
 		Constraints.setTextFieldMaxLength(txtEmail, 60);
 		Utils.formatDatePicker(dpBirhtdate, "dd/MM/yyyy");
-
+		initializeComboBoxDepartment() ;
 	}
 
 	public void updateFormData() {
@@ -151,16 +166,45 @@ public class SellerFormController implements Initializable {
 		txtEmail.setText(entity.getEmail());
 		Locale.setDefault(Locale.US);
 		txtBaseSalary.setText(String.format("%.2f", entity.getBaseSalary()));
-			if(entity.getBirthDate() != null) {
-				dpBirhtdate.setValue(LocalDate.ofInstant(entity.getBirthDate().toInstant(), ZoneId.systemDefault() ));
-			}
+		if (entity.getBirthDate() != null) {
+			dpBirhtdate.setValue(LocalDate.ofInstant(entity.getBirthDate().toInstant(), ZoneId.systemDefault()));
 		}
+		if ( entity.getDepartment() == null) {
+			comboBoxDepartment.getSelectionModel().selectFirst();
+		}
+		else {
+		comboBoxDepartment.setValue(entity.getDepartment());
+		}
+		
+	}
+
+	public void loadAssociatedObjects() {
+		if (departmentService == null) {
+			throw new IllegalStateException("DepartmentService was null");
+		}
+		List<Department> list = departmentService.findAll();
+		obsList = FXCollections.observableArrayList(list);
+		comboBoxDepartment.setItems(obsList);
+	}
 
 	private void setErrorMessages(Map<String, String> errors) {
 		Set<String> fields = errors.keySet();
-		
-		if(fields.contains("name")) {
+
+		if (fields.contains("name")) {
 			labelErrorName.setText(errors.get("name"));
 		}
+	}
+
+	private void initializeComboBoxDepartment() {
+		Callback<ListView<Department>, ListCell<Department>> factory = lv -> new ListCell<Department>() {
+			@Override
+			protected void updateItem(Department item, boolean empty) {
+				super.updateItem(item, empty);
+				setText(empty ? "" : item.getName());
+			}
+		};
+
+		comboBoxDepartment.setCellFactory(factory);
+		comboBoxDepartment.setButtonCell(factory.call(null));
 	}
 }
